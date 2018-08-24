@@ -2,7 +2,9 @@ __precompile__(true)
 
 module TransformUtils
 
-import Base: convert, promote_rule, *, transpose, normalize, normalize!, \, vec
+using LinearAlgebra
+import LinearAlgebra: normalize, normalize!, adjoint
+import Base: convert, promote_rule, *, \, vec, transpose
 
 export
   Quaternion,
@@ -67,18 +69,20 @@ export
   se2vee!
 
 
-
-  function skew(v::Array{Float64,1})
-      S = zeros(3,3)
-      S[1,:] = [0., -v[3], v[2]]
-      S[2,:] = [v[3],0.,-v[1]]
-      S[3,:] = [-v[2],v[1],0.]
-      return S
-  end
-
 const FloatInt = Union{Float64,Int}
 const VectorFloatInt = Union{Vector{Float64},Vector{Int}}
 
+function eye(m::FloatInt)
+    Matrix(1.0I, m, m)
+end
+
+function skew(v::Array{Float64,1})
+    S = zeros(3,3)
+    S[1,:] = [0., -v[3], v[2]]
+    S[2,:] = [v[3],0.,-v[1]]
+    S[3,:] = [-v[2],v[1],0.]
+    return S
+end
 
 mutable struct Quaternion
     s::Float64
@@ -196,7 +200,8 @@ function q_conj(q::Quaternion)
 end
 
 
-transpose(a::SO3) = SO3(a.R')
+transpose(a::SO3) = SO3(transpose(a.R)[:,:])
+adjoint(a::SO3) = SO3(a.R'[:,:])
 inverse(a::SO3) = transpose(a)
 
 
@@ -253,7 +258,7 @@ inverse(a::SE3) = SE3( matrix(a) \ eye(4) )
 # Xj = Xi ⊕ ΔX
 # Xj ⊖ ΔX = Xi
 # Xi \ Xj = ΔX   # ⊖ Xi ⊕ Xj = ΔX
-A_invB(a::SE3, b::SE3) = SE3( ( matrix(b)' \ (matrix(a)') )' )
+A_invB(a::SE3, b::SE3) = SE3( ( matrix(b)' \ (matrix(a)') )'[:,:] )
 ominus(xi::SE3, xj::SE3) = A_invB(xi,xj)
 oplus(xi::SE3, xj::SE3) = xi*xj
 ⊖(xi::SE3, xj::SE3) = A_invB(xi,xj)
@@ -423,11 +428,11 @@ function convert!(Eu::Euler, q::Quaternion)
   # c = q.v[2]
   # d = q.v[3]
 
-  Eu.R = atan2(2.0*(q.v[2]*q.v[3] + q.v[1]*q.s), q.s*q.s - q.v[1]^2 - q.v[2]^2 + q.v[3]^2)
+  Eu.R = atan(2.0*(q.v[2]*q.v[3] + q.v[1]*q.s), q.s*q.s - q.v[1]^2 - q.v[2]^2 + q.v[3]^2)
   # Eu.R = -atan2(2.0*(q.v[2]*q.v[3] - q.v[1]*q.s), q.s*q.s - q.v[1]^2 - q.v[2]^2 + q.v[3]^2)
   #-atan2(2.0*(q.v[2]*q.v[3] - q.v[1]*q.s),1.0-2.0*(q.v[1]^2+q.v[2]^2)); # -atan2(2.0*(q.v[2]*q.v[3] - q.v[1]*q.s), q.s*q.s - q.v[1]^2 - q.v[2]^2 + q.v[3]^2) #numerically more stable
   Eu.P = asin(2.0*(q.v[2]*q.s - q.v[1]*q.v[3]));
-  Eu.Y =  atan2(2.0*(q.v[1]*q.v[2] + q.v[3]*q.s), q.s^2 + q.v[1]^2 - q.v[2]^2 - q.v[3]^2)
+  Eu.Y =  atan(2.0*(q.v[1]*q.v[2] + q.v[3]*q.s), q.s^2 + q.v[1]^2 - q.v[2]^2 - q.v[3]^2)
   # Eu.Y = -atan2(2.0*(q.v[1]*q.v[2] - q.v[3]*q.s),1.0-2.0*(q.v[2]^2+q.v[3]^2)); # -atan2(2.0*(q.v[1]*q.v[2] - q.v[3]*q.s), q.s^2 + q.v[1]^2 - q.v[2]^2 - q.v[3]^2)
 
   nothing
@@ -622,7 +627,7 @@ function convert(::Type{SO3}, alg::so3)
   v = vee(alg)
   nv = norm(v)
   if nv < 1e-3
-    return SO3(expm(alg.S))
+    return SO3(exp(alg.S))
   else
     invnv = 1.0/nv
     return SO3(eye(3) + invnv*(sin(nv)*alg.S + invnv*(1.0-cos(nv))*(alg.S^2) ) )
