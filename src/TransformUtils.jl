@@ -107,6 +107,7 @@ mutable struct SO3
     SO3() = new()
     SO3(dummy::FloatInt) = new(eye(3))
     SO3(r::Array{Float64,2}) = new(r)
+#    SO3(E::Euler) = new(convert(SO3,E))
 end
 
 mutable struct so3
@@ -140,6 +141,9 @@ mutable struct Euler
     Euler(v::VectorFloatInt, q::Quaternion) = new(v[1],v[2],v[3], q)
 end
 
+#explicit convertion constructors
+SO3(E::Euler) = convert(SO3,E)
+Euler(SO3::SO3) = convert(Euler,SO3)
 
 mutable struct SE3
   R::SO3
